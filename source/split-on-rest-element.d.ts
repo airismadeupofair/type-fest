@@ -1,10 +1,14 @@
 import type {IfNotAnyOrNever, IsExactOptionalPropertyTypesEnabled} from './internal/type.d.ts';
 import type {ApplyDefaultOptions} from './internal/object.d.ts';
 import type {IsOptionalKeyOf} from './is-optional-key-of.d.ts';
-import type {IsArrayReadonly} from './internal/array.d.ts';
+import type {IsArrayReadonly, SetArrayAccess} from './internal/array.d.ts';
 import type {UnknownArray} from './unknown-array.d.ts';
 import type {TupleOf} from './tuple-of.d.ts';
 import type {If} from './if.d.ts';
+import type {Sum} from "./sum.d.ts"
+import type {ArrayTail} from "./array-tail.d.ts"
+// import type {Subtract} from './subtract.d.ts'
+// import type {Writable} from './writable.d.ts'
 
 /**
 {@link SplitOnRestElement} options.
@@ -76,147 +80,118 @@ export type SplitOnRestElement<
 			: never // Should never happen
 		: never; // Should never happen
 
-type Required1000UnknownElements = TupleOf<1000>
-type Required100UnknownElements = TupleOf<100>
-type Required10UnknownElements = TupleOf<10>
+type ToFillSlotsFromT = Record<`${number}`|number, unknown> & Record<string|symbol, unknown>
+type MatcherListT = [TupleOf<1000>, TupleOf<100>, TupleOf<10>, TupleOf<1>]
 
-type Optional1000UnknownElements = Partial<Required1000UnknownElements>;
-type Optional100UnknownElements = Partial<Required100UnknownElements>;
-type Optional10UnknownElements = Partial<Required10UnknownElements>;
+// fill the slots of the matcher tuple using the values from the object
+type FillTupleSlotsWithNumberKeys<Obj extends ToFillSlotsFromT, Tuple extends UnknownArray> = {
+    [K in keyof Tuple]: Obj[K]
+}
 
-// because ts doesnt support doing infer from multiple rest elements a double inference is needed to extract the first N elements and the rest
-type GetAllRequiredElementsOnLeftSide<Array_ extends UnknownArray, Accumulator extends UnknownArray = []> =
-	// Get the first 1000 required elements
-    Array_ extends {[999]: unknown}
-        ? Array_ extends readonly [...infer ThousandRequiredElements extends Required1000UnknownElements, ...any] // pull out the elements using the constraint of a fixed tuple
-            ? Array_ extends readonly [...Required1000UnknownElements, ...infer RestElements]
-                ? GetAllRequiredElementsOnLeftSide<RestElements, [...Accumulator, ...ThousandRequiredElements]>
-                : never // should not here because case above would fail
-            : never // should not here because case above would fail
-    
-    // Get the first 100
-    : Array_ extends {[99]: unknown}
-        ? Array_ extends readonly [...infer HundredRequiredElements extends Required100UnknownElements, ...any] // pull out the elements using the constraint of a fixed tuple
-            ? Array_ extends readonly [...Required100UnknownElements, ...infer RestElements]
-                ? GetAllRequiredElementsOnLeftSide<RestElements, [...Accumulator, ...HundredRequiredElements]>
-                : never // should not here because case above would fail
-            : never // should not here because case above would fail
-    
-    // get the first 10
-    : Array_ extends {[9]: unknown}
-        ? Array_ extends readonly [...infer TenRequiredElements extends Required10UnknownElements, ...any] // pull out the elements using the constraint of a fixed tuple
-            ? Array_ extends readonly [...Required10UnknownElements, ...infer RestElements]
-                ? GetAllRequiredElementsOnLeftSide<RestElements, [...Accumulator, ...TenRequiredElements]>
-                : never // should not here because case above would fail
-            : never // should not here because case above would fail
-    
-    // just get the first element
-    : Array_ extends readonly [infer RequiredElement, ...infer RestElements]
-    ? GetAllRequiredElementsOnLeftSide<RestElements, [...Accumulator, RequiredElement]>
-    : [Accumulator, Array_]
-	
-// because ts doesnt support doing infer from multiple rest elements a double inference is needed to extract the first N elements and the rest.
-type GetAllOptionalElementsOnLeftSide<Array_ extends UnknownArray, Accumulator extends UnknownArray = []> =
-    // ge the first 1000 items
-    Array_ extends {[999]?: unknown}
-        ? Array_ extends readonly [...infer ThousandOptionalElements extends Optional1000UnknownElements, ...any]
-            ? Array_ extends readonly [...Optional1000UnknownElements, ...infer RestElements]
-                ? GetAllOptionalElementsOnLeftSide<RestElements, [...Accumulator, ...ThousandOptionalElements]>
+type GetFixedItemsFromLeft<Array_ extends UnknownArray, Matcher extends UnknownArray> =
+    // check if the object has that key
+    `${Sum<Matcher["length"], -1>}` extends keyof Array_
+    ?
+        // do inference
+        Array_ extends readonly [...Matcher, ...infer Rest extends UnknownArray]
+        ? [FillTupleSlotsWithNumberKeys<Pick<Array_, (keyof Matcher & keyof Array_) & `${number}`>, Matcher>, Rest]
+        // the inference failed due to an optional item
+        : [[], Array_]
+    // the Array_ doesnt contain enough items
+    : [[], Array_]
+
+type GetItemsFromLeft<Array_ extends UnknownArray, MatcherList extends readonly UnknownArray[], _Acc extends UnknownArray = []> =
+    MatcherList extends readonly []
+        // All the matchers are removed, meaning that the left side is devoid of fixed items that can be matched by the matchers
+        ? [_Acc, Array_]
+        : 
+            // Perform the left side extraction
+            GetFixedItemsFromLeft<Array_, MatcherList[0]> extends [
+                infer FixedItems extends UnknownArray,
+                infer RestArray extends UnknownArray,
+            ]
+                ?
+                    // Check if FixedItems is empty, which means the inference failed
+                    FixedItems extends readonly []
+                        // Remove the first (largest) matcher from the matcher list and keep the accumulator the same
+                        ? GetItemsFromLeft<RestArray, ArrayTail<MatcherList>, _Acc>
+                        // Keep the first (largest) matcher from the matcher list and append the fixed items to the accumulator
+                        : GetItemsFromLeft<RestArray, MatcherList, [..._Acc, ...FixedItems]>
+                // Should not reach here as the inference should always pass
                 : never
-            : never
 
-    // get the first 100 items
-    : Array_ extends {[99]?: unknown}
-        ? Array_ extends readonly [...infer HundredOptionalElements extends Optional100UnknownElements, ...any]
-            ? Array_ extends readonly [...Optional100UnknownElements, ...infer RestElements]
-                ? GetAllOptionalElementsOnLeftSide<RestElements, [...Accumulator, ...HundredOptionalElements]>
-                : never
-            : never
-			
-    // get the first 10 items
-    : Array_ extends {[9]?: unknown}
-        ? Array_ extends readonly [...infer TenOptionalElements extends Optional10UnknownElements, ...any]
-            ? Array_ extends readonly [...Optional10UnknownElements, ...infer RestElements]
-                ? GetAllOptionalElementsOnLeftSide<RestElements, [...Accumulator, ...TenOptionalElements]>
-                : never
-            : never
-    // get the first item
-	: Array_ extends {[0]?: unknown}
-		? Array_ extends readonly [(infer Head)?, ...infer RestElements]
-			? GetAllOptionalElementsOnLeftSide<RestElements, [...Accumulator, ...[Head?]]>
-			: never
-	: [Accumulator, Array_];
 
-type GetAllElementsOnLeftSide<Array_ extends UnknownArray> =
-	GetAllRequiredElementsOnLeftSide<Array_> extends [infer RequiredElements extends UnknownArray, infer OptionalElementsAndRest extends UnknownArray]
-	? GetAllOptionalElementsOnLeftSide<OptionalElementsAndRest> extends [infer OptionalElements extends UnknownArray, infer RestAtStart extends UnknownArray]
-		? [RequiredElements, OptionalElements, RestAtStart]
-		: never
-	: never
 
-type GetAllRequiredElementsOnRightSide<Array_ extends UnknownArray, Accumulator extends UnknownArray = []> = 
-	Array_ extends readonly [...any, ...infer ThousandRequiredElements extends Required1000UnknownElements]
-	? Array_ extends readonly [...infer RestElements, ...Required1000UnknownElements]
-		? GetAllRequiredElementsOnRightSide<RestElements, [...ThousandRequiredElements, ...Accumulator]>
-		: never
-	: Array_ extends readonly [...any, ...infer HundredRequiredElements extends Required100UnknownElements]
-		? Array_ extends readonly [...infer RestElements, ...Required100UnknownElements]
-			? GetAllRequiredElementsOnRightSide<RestElements, [...HundredRequiredElements, ...Accumulator]>
-			: never
-	: Array_ extends readonly [...any, ...infer TenRequiredElements extends Required10UnknownElements]
-		? Array_ extends readonly [...infer RestElements, ...Required10UnknownElements]
-			? GetAllRequiredElementsOnRightSide<RestElements, [...TenRequiredElements, ...Accumulator]>
-			: never
-	: Array_ extends readonly [...infer RestElements, infer Last]
-		? GetAllRequiredElementsOnRightSide<RestElements, [Last, ...Accumulator]>
-	: [Accumulator, Array_]
+type GetAllItemsFromLeft<Array_ extends UnknownArray, MatcherList extends readonly UnknownArray[]> = 
+    // Extract the required elements first
+    GetItemsFromLeft<Array_, MatcherList> extends [infer Accumulated extends UnknownArray, infer RestArray extends UnknownArray]
+    // Extract the optional elements by making them Required and then making them Optional
+    ? GetItemsFromLeft<Required<RestArray>, MatcherList> extends [infer OptionalAccumulated extends UnknownArray, infer FinalRestArray extends UnknownArray]
+        // Return the Required, the Optional and the Rest
+        ? [[Accumulated, Partial<OptionalAccumulated>], FinalRestArray]
+        // Should not reach here as the inference should always pass
+        : never
+    // Should not reach here as the inference should always pass
+    : never
 
-type TransformOptionalElementsByOptions<
-	OptionalElements extends UnknownArray, 
-	Options extends Required<SplitOnRestElementOptions>
-> = 
+// extract the rest from the left side preceding the matcher
+type GetRestFromRightSideWithMatcher<Array_ extends UnknownArray, Matcher extends UnknownArray> =
+    Array_ extends readonly [...infer Rest, ...Matcher]
+    ? Rest
+    : never
+
+// For some reason Extraction of chunk of tuples leads it just getting explicitly casted to the constraint
+// therefore this part is done manually
+type ExtractRightSide<Array_ extends UnknownArray, _Acc extends UnknownArray = []> =
+	// Extract 1000s
+    Array_ extends readonly [...any, ...infer Chunk extends MatcherListT[0]]
+    ? ExtractRightSide<GetRestFromRightSideWithMatcher<Array_, MatcherListT[0]>, [...Chunk, ..._Acc]>
+	// Extract 100s
+    : Array_ extends readonly [...any, ...infer Chunk extends MatcherListT[1]]
+    ? ExtractRightSide<GetRestFromRightSideWithMatcher<Array_, MatcherListT[1]>, [...Chunk, ..._Acc]>
+	// Extract 10s
+    : Array_ extends readonly [...any, ...infer Chunk extends MatcherListT[2]]
+    ? ExtractRightSide<GetRestFromRightSideWithMatcher<Array_, MatcherListT[2]>, [...Chunk, ..._Acc]>
+	// Extract 1s
+    : Array_ extends readonly [...any, ...infer Chunk extends MatcherListT[3]]
+    ? ExtractRightSide<GetRestFromRightSideWithMatcher<Array_, MatcherListT[3]>, [...Chunk, ..._Acc]>
+    : [_Acc, Array_]
+
+type ApplyOptionsOnOptionalElements<OptionalElements extends UnknownArray, Options extends Required<SplitOnRestElementOptions>> =
 	Options["preserveOptionalModifier"] extends true
 	? OptionalElements
-	: IsExactOptionalPropertyTypesEnabled extends true
-		? Required<OptionalElements>
-		: {[Key in keyof OptionalElements]-?: OptionalElements[Key] | undefined}
+	: Required<
+		IsExactOptionalPropertyTypesEnabled extends true
+			? OptionalElements
+			: {
+				[K in keyof OptionalElements]: OptionalElements[K] | undefined
+			}
+	>
 
-export type _SplitOnRestElement<
-	Array_ extends UnknownArray,
-	Options extends Required<SplitOnRestElementOptions>,
-> = 
+/**
+Deconstructs an array on its rest element and returns the split portions.
+*/
+export type _SplitOnRestElement<Array_ extends UnknownArray, Options extends Required<SplitOnRestElementOptions>> = 
 	number extends Array_["length"]
-		? GetAllRequiredElementsOnRightSide<Array_> extends [infer LastElements extends UnknownArray, infer FrontElementsAndRest extends UnknownArray]
-			? LastElements extends []
-				? GetAllElementsOnLeftSide<FrontElementsAndRest> extends [
-					infer RequiredElements extends UnknownArray, 
-					infer OptionalElements extends UnknownArray, 
-					infer RestElement extends UnknownArray // is now a true array
-				]
-					? [
-						[...RequiredElements, ...TransformOptionalElementsByOptions<OptionalElements, Options>]
-						,RestElement, LastElements
-					] extends infer Value extends [UnknownArray, UnknownArray, UnknownArray]
-						? If<IsArrayReadonly<Array_>, Readonly<Value>, Value>
-						: never
-					: never
-			: GetAllRequiredElementsOnLeftSide<FrontElementsAndRest> extends [infer FrontRequiredElements extends UnknownArray, infer RestElement extends UnknownArray]
-				? [FrontRequiredElements, RestElement, LastElements] extends infer Value extends [UnknownArray, UnknownArray, UnknownArray]
-					? If<IsArrayReadonly<Array_>, Readonly<Value>, Value>
-					: never
+	? 
+		GetAllItemsFromLeft<Array_, MatcherListT> extends [[infer RequiredElements extends UnknownArray, infer OptionalElements extends UnknownArray], infer RestAndRightSideElementsArray extends UnknownArray]
+			? ExtractRightSide<RestAndRightSideElementsArray> extends [infer RightFixedElements extends UnknownArray, infer RestArray extends UnknownArray]
+				? SetArrayAccess<[
+					[...RequiredElements, ...ApplyOptionsOnOptionalElements<OptionalElements, Options>], 
+					RestArray, 
+					RightFixedElements
+				], IsArrayReadonly<Array_>>
+				// should not reach here
 				: never
+			// should never happen
 			: never
-		: GetAllElementsOnLeftSide<Array_> extends [
-			infer RequiredElements extends UnknownArray, 
-			infer OptionalElements extends UnknownArray, 
-			infer RestElement extends UnknownArray // is really just []
-		]
-			? [
-				[...RequiredElements, ...TransformOptionalElementsByOptions<OptionalElements, Options>]
-				,RestElement, []
-			] extends infer Value extends [UnknownArray, UnknownArray, UnknownArray]
-				? If<IsArrayReadonly<Array_>, Readonly<Value>, Value>
-				: never
-			: never
+	: GetAllItemsFromLeft<Array_, MatcherListT> extends [[infer RequiredElements extends UnknownArray, infer OptionalElements extends UnknownArray], unknown]
+		? SetArrayAccess<[
+			[...RequiredElements, ...ApplyOptionsOnOptionalElements<OptionalElements, Options>], 
+			[], 
+			[]
+		], IsArrayReadonly<Array_>>
+		// should not reach here
+		: never
 
 export {};

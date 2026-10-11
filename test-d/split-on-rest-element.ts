@@ -61,6 +61,9 @@ expectType<SplitOnRestElement<[...FiftyZeroes, ...number[], ...FiftyZeroes]>>({}
 type FourHundredNinetyNineZeroes = TupleOf<499, '0'>;
 expectType<SplitOnRestElement<[...FourHundredNinetyNineZeroes, ...number[], ...FourHundredNinetyNineZeroes]>>({} as [FourHundredNinetyNineZeroes, number[], FourHundredNinetyNineZeroes]);
 
+type FourThousandFourHundredNinetyNineZeroes = TupleOf<499, '0'>;
+expectType<SplitOnRestElement<[...FourThousandFourHundredNinetyNineZeroes, ...number[], ...FourThousandFourHundredNinetyNineZeroes]>>({} as [FourThousandFourHundredNinetyNineZeroes, number[], FourThousandFourHundredNinetyNineZeroes]);
+
 // Generic instantiations
 type Assignability<_T extends UnknownArray> = unknown;
 type TestAssignability<T extends UnknownArray> = Assignability<SplitOnRestElement<T>>;
