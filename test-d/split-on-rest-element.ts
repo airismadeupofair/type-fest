@@ -61,6 +61,10 @@ expectTypeOf<[FiftyZeroes, number[], FiftyZeroes]>().toBe<SplitOnRestElement<[..
 type FourHundredNinetyNineZeroes = TupleOf<499, '0'>;
 expectTypeOf<[FourHundredNinetyNineZeroes, number[], FourHundredNinetyNineZeroes]>().toBe<SplitOnRestElement<[...FourHundredNinetyNineZeroes, ...number[], ...FourHundredNinetyNineZeroes]>>();
 
+// Very Long Tuples
+type FourThousandFourHundredNinetyNineZeroes = TupleOf<4999, '0'>;
+expectTypeOf<[FourThousandFourHundredNinetyNineZeroes, number[], FourThousandFourHundredNinetyNineZeroes]>().toBe<SplitOnRestElement<[...FourThousandFourHundredNinetyNineZeroes, ...number[], ...FourThousandFourHundredNinetyNineZeroes]>>()
+
 // Generic instantiations
 type Assignability<_T extends UnknownArray> = unknown;
 type TestAssignability<T extends UnknownArray> = Assignability<SplitOnRestElement<T>>;
